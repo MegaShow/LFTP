@@ -1,5 +1,6 @@
 package com.icytown.course.lftp.command;
 
+import com.icytown.course.lftp.network.PacketSocket;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Parameters;
 
@@ -14,8 +15,18 @@ public class LGet implements Runnable {
 
     @Override
     public void run() {
-        System.out.println("Call LGet");
-        System.out.println("Url: " + url);
-        System.out.println("Filename: " + filename);
+        int port = 2333, index = url.indexOf(':');
+        if (index != -1) {
+            try {
+                port = Integer.parseInt(url.substring(index + 1));
+            } catch (NumberFormatException e) {
+                System.err.println("Server url '" + url + "' invalid.");
+                return;
+            }
+            url = url.substring(0, index);
+        }
+        PacketSocket.sendNowAsync(url, port, filename, packet -> {
+            System.out.println("Send packet successfully.");
+        });
     }
 }
