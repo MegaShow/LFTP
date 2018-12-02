@@ -1,5 +1,6 @@
 package com.icytown.course.lftp.network;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
@@ -22,7 +23,7 @@ public class Server {
         return socket != null;
     }
 
-    public boolean serve() {
+    public boolean serve(String folderPath) {
         while (true) {
             byte[] data = new byte[1400];
             DatagramPacket rawPacket = new DatagramPacket(data, data.length);
@@ -30,13 +31,25 @@ public class Server {
                 socket.receive(rawPacket);
                 Packet packet = Packet.fromBytes(rawPacket.getData());
                 if (packet != null) {
-                    System.out.println(new String(packet.getData()));
-                    byte[] ackData = new Packet(packet.getId(), true).getBytes();
-                    DatagramPacket ackPacket = new DatagramPacket(ackData, ackData.length, rawPacket.getAddress(), rawPacket.getPort());
-                    socket.send(ackPacket);
+                    String parameters = new String(packet.getData());
+                    System.out.println(parameters);
+                    String type = parameters.substring(0, parameters.indexOf(','));
+                    String filename = parameters.substring(parameters.indexOf(',') + 1);
+                    if(type == "lget") {
+                        LGetServer lGetServer = new LGetServer(rawPacket.getAddress(), rawPacket.getPort(), folderPath + "/" + filename);
+                        lGetServer.run();
+                    }
+                    else {
+                        LSendServer lSendServer = new LSendServer(rawPacket.getAddress(), rawPacket.getPort(), folderPath + "/" + filename);
+                        lSendServer.run();
+                    }
                 }
+            } catch (FileNotFoundException e) {
+                System.err.println("File doesn't exist on server.");
             } catch (IOException e) {
-                return false;
+                System.err.println("Server failed to transfer or write.");
+            } catch (LFTPException e) {
+                System.err.println(e.getMessage());
             }
         }
     }

@@ -36,7 +36,7 @@ public class Serve implements Runnable {
             return;
         }
         System.out.println("Listen at port '" + port + "'.");
-        boolean status = server.serve();
+        boolean status = server.serve(folder.getAbsolutePath());
         if (!status) {
             System.err.println("Receive packet failed.");
         }

@@ -8,18 +8,24 @@ public class Packet implements Serializable {
 
     private boolean ack;
     private boolean end;
-
+    private int rcvWindow;
     private byte[] data;
 
     private transient OnCallbackListener onCallbackListener;
+    private transient ResendTask resendTask;
 
     public Packet(int id) {
         this.id = id;
     }
 
-    public Packet(int id, boolean ack) {
+    public Packet(int id, boolean ack, int rcvWindow) {
         this.id = id;
         this.ack = ack;
+        this.rcvWindow = rcvWindow;
+    }
+
+    public void setEnd(boolean _end) {
+        end = _end;
     }
 
     public int getId() {
@@ -28,6 +34,14 @@ public class Packet implements Serializable {
 
     public boolean isAck() {
         return ack;
+    }
+
+    public boolean isEnd() {
+        return end;
+    }
+
+    public int getRcvWindow() {
+        return rcvWindow;
     }
 
     public void setData(byte[] data) {
@@ -40,6 +54,19 @@ public class Packet implements Serializable {
 
     public void setOnCallbackListener(OnCallbackListener onCallbackListener) {
         this.onCallbackListener = onCallbackListener;
+    }
+
+    public void setResendTask(ResendTask resendTask) {
+        this.resendTask = resendTask;
+    }
+
+    public ResendTask getResendTask() {
+        return resendTask;
+    }
+
+    public void cancelResendTask() {
+        resendTask.cancel();
+        resendTask = null;
     }
 
     public static Packet fromBytes(byte[] bytes) {

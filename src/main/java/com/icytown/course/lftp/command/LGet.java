@@ -1,8 +1,14 @@
 package com.icytown.course.lftp.command;
 
+import com.icytown.course.lftp.network.LFTPException;
+import com.icytown.course.lftp.network.LGetClient;
 import com.icytown.course.lftp.network.PacketSocket;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Parameters;
+
+import java.io.IOException;
+import java.net.SocketException;
+import java.net.UnknownHostException;
 
 @Command(name = "lget", aliases = {"g"}, mixinStandardHelpOptions = true, description = "Download a file from server.")
 public class LGet implements Runnable {
@@ -25,8 +31,24 @@ public class LGet implements Runnable {
             }
             url = url.substring(0, index);
         }
+
+        /*
         PacketSocket.sendNowAsync(url, port, filename, packet -> {
             System.out.println("Send packet successfully.");
         });
+        */
+
+        try{
+            LGetClient lGetClient = new LGetClient(url, port, filename);
+            lGetClient.run();
+        } catch (UnknownHostException e) {
+            System.err.println("Send failed, unknown host.");
+        } catch (SocketException e) {
+            System.err.println("Send failed, can not create socket.");
+        } catch (IOException e) {
+            System.err.println("Transfer or write failed.");
+        } catch (LFTPException e) {
+            System.err.println(e.getMessage());
+        }
     }
 }
