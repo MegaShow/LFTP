@@ -1,39 +1,66 @@
 package com.icytown.course.lftp.network;
 
+import com.icytown.course.lftp.util.Console;
+
 import java.io.IOException;
 import java.net.*;
+import java.nio.ByteBuffer;
+import java.nio.channels.DatagramChannel;
 
 public class PacketSocket {
 
     private static int sequence = 0;
 
-    public static void sendNowAsync(String ip, int port, String msg, Packet.OnCallbackListener onCallbackListener) {
+    public static byte[] send(String ip, int port, long timeOut, byte[] body) {
         try {
-            DatagramSocket socket = new DatagramSocket();
+            Packet result = null;
+            DatagramChannel channel = DatagramChannel.open();
+            channel.configureBlocking(false);
             Packet packet = new Packet(sequence);
-            packet.setData(msg.getBytes());
-            packet.setOnCallbackListener(onCallbackListener);
-            byte[] data = packet.getBytes();
-            byte[] ackData = new byte[1400];
-            DatagramPacket datagramPacket = new DatagramPacket(data, data.length, InetAddress.getByName(ip), port);
-            DatagramPacket ackDatagramPacket = new DatagramPacket(data, data.length);
             sequence++;
-            socket.send(datagramPacket);
-            while (true) {
-                socket.receive(ackDatagramPacket);
-                Packet ackPacket = Packet.fromBytes(ackDatagramPacket.getData());
-                if (ackPacket != null && ackPacket.getId() == packet.getId() && ackPacket.isAck()) {
-                    onCallbackListener.onSuccess(packet);
-                    break;
+            packet.setData(body);
+            byte[] data = packet.getBytes();
+            ByteBuffer buffer = ByteBuffer.wrap(data);
+            SocketAddress address = new InetSocketAddress(ip, port);
+            long timeOutTime = 500;
+            long lastTime;
+            boolean flag = false;
+            Console.out("Send request to " + ip + ":" + port + ".");
+            while (!flag && timeOutTime < timeOut) {
+                channel.send(buffer, address);
+                lastTime = System.currentTimeMillis();
+                ByteBuffer recBuffer = ByteBuffer.allocate(1400);
+                while (System.currentTimeMillis() - lastTime < timeOutTime && System.currentTimeMillis() - lastTime < timeOut) {
+                    SocketAddress recAddress = channel.receive(recBuffer);
+                    if (recAddress != null) {
+                        Packet recPacket = Packet.fromBytes(recBuffer.array());
+                        if (recPacket != null && recPacket.getId() == packet.getId() && recPacket.isAck()) {
+                            result = recPacket;
+                            flag = true;
+                            break;
+                        }
+                    }
+                }
+                if (!flag) {
+                    timeOutTime <<= 1;
+                    channel.send(buffer, address);
+                    Console.err("Time out, send request to " + ip + ":" + port + " again.");
                 }
             }
-            socket.close();
+            channel.close();
+            if (flag) {
+                Console.out("Send request successfully.");
+                return result.getData();
+            } else {
+                Console.err("Time out, please check your network.");
+            }
         } catch (SocketException e) {
-            System.err.println("Send failed, can not create socket.");
+            Console.err("Send failed, can not create socket.");
         } catch (UnknownHostException e) {
-            System.err.println("Send failed, unknown host.");
+            Console.err("Send failed, unknown host.");
         } catch (IOException e) {
-            System.err.println("Send failed.");
+            Console.err("Send failed.");
         }
+        return null;
     }
 }

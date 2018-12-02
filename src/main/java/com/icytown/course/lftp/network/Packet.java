@@ -18,6 +18,11 @@ public class Packet implements Serializable {
         this.id = id;
     }
 
+    public Packet(int id, boolean ack) {
+        this.id = id;
+        this.ack = ack;
+    }
+
     public Packet(int id, boolean ack, int rcvWindow) {
         this.id = id;
         this.ack = ack;

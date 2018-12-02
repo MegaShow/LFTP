@@ -1,15 +1,15 @@
 package com.icytown.course.lftp.network;
 
+import com.icytown.course.lftp.util.Console;
+
+import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.net.DatagramPacket;
-import java.net.DatagramSocket;
-import java.net.SocketException;
+import java.net.*;
 
 public class Server {
 
     private DatagramSocket socket;
-    private int sequence;
 
     public Server(int port) {
         try {
@@ -24,32 +24,51 @@ public class Server {
     }
 
     public boolean serve(String folderPath) {
+        byte[] data = new byte[1400];
+        DatagramPacket rawPacket = new DatagramPacket(data, data.length);
         while (true) {
-            byte[] data = new byte[1400];
-            DatagramPacket rawPacket = new DatagramPacket(data, data.length);
             try {
                 socket.receive(rawPacket);
                 Packet packet = Packet.fromBytes(rawPacket.getData());
                 if (packet != null) {
-                    String parameters = new String(packet.getData());
-                    System.out.println(parameters);
-                    String type = parameters.substring(0, parameters.indexOf(','));
-                    String filename = parameters.substring(parameters.indexOf(',') + 1);
-                    if(type == "lget") {
-                        LGetServer lGetServer = new LGetServer(rawPacket.getAddress(), rawPacket.getPort(), folderPath + "/" + filename);
-                        lGetServer.run();
+                    String url = rawPacket.getAddress().getHostName() + ":" + rawPacket.getPort();
+                    Console.out("Recieve request from " + url);
+                    String[] parameters = new String(packet.getData()).split(",");
+                    if (parameters[0].equals("Get")) {
+                        File file = new File(folderPath, parameters[1]);
+                        Packet ack = new Packet(packet.getId(), true);
+                        if (!file.exists()) {
+                            ack.setData("not_found".getBytes());
+                            Console.err(url + " want to download '" + file.getAbsolutePath() + "', but not found.");
+                        } else {
+                            DatagramSocket socket = SocketPool.getSocket(url);
+                            if (socket == null) {
+                                ack.setData("failed".getBytes());
+                                Console.err(url + " want to download '" + file.getAbsolutePath() + "', but alloc socket failed.");
+                            } else {
+                                ack.setData(("ok," + socket.getPort()).getBytes());
+                                Console.out(url + " want to download '" + file.getAbsolutePath() + "', allowed.");
+                                new Thread(new SendTask(socket, rawPacket.getAddress(), rawPacket.getPort(), file.getPath())).start();
+                            }
+                        }
+                        byte[] ackData = ack.getBytes();
+                        DatagramPacket ackPacket = new DatagramPacket(ackData, ackData.length, rawPacket.getAddress(), rawPacket.getPort());
+                        socket.send(ackPacket);
                     }
-                    else {
-                        LSendServer lSendServer = new LSendServer(rawPacket.getAddress(), rawPacket.getPort(), folderPath + "/" + filename);
-                        lSendServer.run();
-                    }
+//                        LGetServer lGetServer = new LGetServer(rawPacket.getAddress(), rawPacket.getPort(), folderPath + "/" + filename);
+//                        lGetServer.run();
+//                    }
+//                    else {
+//                        LSendServer lSendServer = new LSendServer(rawPacket.getAddress(), rawPacket.getPort(), folderPath + "/" + filename);
+//                        lSendServer.run();
+//                    }
                 }
             } catch (FileNotFoundException e) {
-                System.err.println("File doesn't exist on server.");
+                Console.err("File doesn't exist on server.");
             } catch (IOException e) {
-                System.err.println("Server failed to transfer or write.");
-            } catch (LFTPException e) {
-                System.err.println(e.getMessage());
+                Console.err("Server failed to transfer or write.");
+//            } catch (LFTPException e) {
+//                Console.err.println(e.getMessage());
             }
         }
     }
