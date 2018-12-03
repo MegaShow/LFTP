@@ -1,6 +1,7 @@
 package com.icytown.course.lftp.network;
 
 import com.icytown.course.lftp.util.Console;
+import javafx.util.Pair;
 
 import java.io.IOException;
 import java.net.*;
@@ -12,9 +13,8 @@ public class PacketSocket {
     private static int sequence = 0;
 
     public static byte[] send(String ip, int port, long timeOut, byte[] body) {
-        try {
+        try (DatagramChannel channel = DatagramChannel.open()) {
             Packet result = null;
-            DatagramChannel channel = DatagramChannel.open();
             channel.configureBlocking(false);
             Packet packet = new Packet(sequence);
             sequence++;
@@ -47,7 +47,6 @@ public class PacketSocket {
                     Console.err("Time out, send request to " + ip + ":" + port + " again.");
                 }
             }
-            channel.close();
             if (flag) {
                 Console.out("Send request successfully.");
                 return result.getData();

@@ -12,7 +12,6 @@ public class Packet implements Serializable {
     private byte[] data;
 
     private transient OnCallbackListener onCallbackListener;
-    private transient ResendTask resendTask;
 
     public Packet(int id) {
         this.id = id;
@@ -59,19 +58,6 @@ public class Packet implements Serializable {
 
     public void setOnCallbackListener(OnCallbackListener onCallbackListener) {
         this.onCallbackListener = onCallbackListener;
-    }
-
-    public void setResendTask(ResendTask resendTask) {
-        this.resendTask = resendTask;
-    }
-
-    public ResendTask getResendTask() {
-        return resendTask;
-    }
-
-    public void cancelResendTask() {
-        resendTask.cancel();
-        resendTask = null;
     }
 
     public static Packet fromBytes(byte[] bytes) {

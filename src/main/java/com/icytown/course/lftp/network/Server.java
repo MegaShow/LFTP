@@ -1,6 +1,7 @@
 package com.icytown.course.lftp.network;
 
 import com.icytown.course.lftp.util.Console;
+import javafx.util.Pair;
 
 import java.io.File;
 import java.io.FileNotFoundException;
@@ -35,33 +36,50 @@ public class Server {
                     Console.out("Recieve request from " + url);
                     String[] parameters = new String(packet.getData()).split(",");
                     if (parameters[0].equals("Get")) {
-                        File file = new File(folderPath, parameters[1]);
+                        File file = new File(folderPath, parameters[2]);
                         Packet ack = new Packet(packet.getId(), true);
                         if (!file.exists()) {
                             ack.setData("not_found".getBytes());
                             Console.err(url + " want to download '" + file.getAbsolutePath() + "', but not found.");
                         } else {
-                            DatagramSocket socket = SocketPool.getSocket(url);
-                            if (socket == null) {
+                            Pair<DatagramSocket, Integer> pair = SocketPool.getSocketAndPort(url);
+                            if (pair == null) {
                                 ack.setData("failed".getBytes());
                                 Console.err(url + " want to download '" + file.getAbsolutePath() + "', but alloc socket failed.");
                             } else {
-                                ack.setData(("ok," + socket.getPort()).getBytes());
+                                ack.setData(("ok," + pair.getValue()).getBytes());
                                 Console.out(url + " want to download '" + file.getAbsolutePath() + "', allowed.");
-                                new Thread(new SendTask(socket, rawPacket.getAddress(), rawPacket.getPort(), file.getPath())).start();
+                                if (pair.getKey() != null) {
+                                    new Thread(new FileSender(pair.getKey(), rawPacket.getAddress(), Integer.parseInt(parameters[1]), file.getPath())).start();
+                                }
+                            }
+                        }
+                        byte[] ackData = ack.getBytes();
+                        DatagramPacket ackPacket = new DatagramPacket(ackData, ackData.length, rawPacket.getAddress(), rawPacket.getPort());
+                        socket.send(ackPacket);
+                    } else if (parameters[0].equals("Send")) {
+                        File file = new File(folderPath, parameters[2]);
+                        Packet ack = new Packet(packet.getId(), true);
+                        if (file.exists()) {
+                            ack.setData("exist".getBytes());
+                            Console.err(url + " want to send file as '" + file.getAbsolutePath() + "', but another file exists.");
+                        } else {
+                            Pair<DatagramSocket, Integer> pair = SocketPool.getSocketAndPort(url);
+                            if (pair == null) {
+                                ack.setData("failed".getBytes());
+                                Console.err(url + " want to send file as '" + file.getAbsolutePath() + "', but alloc socket failed.");
+                            } else {
+                                ack.setData(("ok," + pair.getValue()).getBytes());
+                                Console.out(url + " want to send file as '" + file.getAbsolutePath() + "', allowed.");
+                                if (pair.getKey() != null) {
+                                    new Thread(new FileReceiver(pair.getKey(), file.getPath())).start();
+                                }
                             }
                         }
                         byte[] ackData = ack.getBytes();
                         DatagramPacket ackPacket = new DatagramPacket(ackData, ackData.length, rawPacket.getAddress(), rawPacket.getPort());
                         socket.send(ackPacket);
                     }
-//                        LGetServer lGetServer = new LGetServer(rawPacket.getAddress(), rawPacket.getPort(), folderPath + "/" + filename);
-//                        lGetServer.run();
-//                    }
-//                    else {
-//                        LSendServer lSendServer = new LSendServer(rawPacket.getAddress(), rawPacket.getPort(), folderPath + "/" + filename);
-//                        lSendServer.run();
-//                    }
                 }
             } catch (FileNotFoundException e) {
                 Console.err("File doesn't exist on server.");

@@ -1,13 +1,13 @@
 package com.icytown.course.lftp.command;
 
-import com.icytown.course.lftp.network.LFTPException;
-import com.icytown.course.lftp.network.LGetClient;
-import com.icytown.course.lftp.network.LSendClient;
-import com.icytown.course.lftp.network.LSendServer;
+import com.icytown.course.lftp.network.*;
+import com.icytown.course.lftp.util.Console;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Parameters;
 
+import java.io.File;
 import java.io.IOException;
+import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.SocketException;
 import java.net.UnknownHostException;
@@ -23,38 +23,38 @@ public class LSend implements Runnable {
 
     @Override
     public void run() {
-        System.out.println("Call LSend");
-        System.out.println("Url: " + url);
-        System.out.println("Filename: " + filename);
-
         int port = 2333, index = url.indexOf(':');
         if (index != -1) {
             try {
                 port = Integer.parseInt(url.substring(index + 1));
             } catch (NumberFormatException e) {
-                System.err.println("Server url '" + url + "' invalid.");
+                Console.err("Server url '" + url + "' invalid.");
                 return;
             }
             url = url.substring(0, index);
         }
-
-        InetAddress address;
-        try {
-            address = InetAddress.getByName(url);
-        } catch (UnknownHostException e) {
-            System.err.println("Send failed, unknown host.");
+        File file = new File(filename);
+        if (!file.exists()) {
+            Console.err("File '" + file.getAbsolutePath() + "' doesn't exist.");
             return;
         }
-
-        try{
-            LSendClient lSendClient = new LSendClient(address, port, filename);
-            lSendClient.run();
-        } catch (SocketException e) {
-            System.err.println("Send failed, can not create socket.");
-        } catch (IOException e) {
-            System.err.println("Send failed.");
-        } catch (LFTPException e) {
-            System.err.println(e.getMessage());
+        try {
+            DatagramSocket socket = new DatagramSocket();
+            byte[] bytes = PacketSocket.send(url, port, 5000, ("Send," + socket.getLocalPort() + "," + filename).getBytes());
+            if (bytes == null) {
+                return;
+            }
+            String data = new String(bytes);
+            if (data.equals("exist")) {
+                Console.err("Same filename exist in server, as '" + filename + "'.");
+            } else if (data.contains("ok,")) {
+                String[] parameters = data.split(",");
+                new Thread(new FileSender(socket, InetAddress.getByName(url), Integer.parseInt(parameters[1]), filename)).start();
+            } else {
+                Console.err("Unknown response data: " + data);
+            }
+        } catch (SocketException | UnknownHostException e) {
+            Console.err("Create socket failed.");
         }
     }
 }

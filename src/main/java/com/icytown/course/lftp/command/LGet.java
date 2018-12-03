@@ -1,9 +1,13 @@
 package com.icytown.course.lftp.command;
 
+import com.icytown.course.lftp.network.FileReceiver;
 import com.icytown.course.lftp.network.PacketSocket;
 import com.icytown.course.lftp.util.Console;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Parameters;
+
+import java.net.DatagramSocket;
+import java.net.SocketException;
 
 
 @Command(name = "lget", aliases = {"g"}, mixinStandardHelpOptions = true, description = "Download a file from server.")
@@ -27,36 +31,22 @@ public class LGet implements Runnable {
             }
             url = url.substring(0, index);
         }
-        byte[] bytes = PacketSocket.send(url, port, 5000, ("Get," + filename).getBytes());
-        if (bytes == null) {
-            return;
+        try {
+            DatagramSocket socket = new DatagramSocket();
+            byte[] bytes = PacketSocket.send(url, port, 5000, ("Get," + socket.getLocalPort() + "," + filename).getBytes());
+            if (bytes == null) {
+                return;
+            }
+            String data = new String(bytes);
+            if (data.equals("not_found")) {
+                Console.err("No such file in server, cannot find '" + filename + "'.");
+            } else if (data.contains("ok,")) {
+                new Thread(new FileReceiver(socket, filename)).start();
+            } else {
+                Console.err("Unknown response data: " + data);
+            }
+        } catch (SocketException e) {
+            Console.err("Create socket failed.");
         }
-        String data = new String(bytes);
-        if (data.equals("not_found")) {
-            Console.err("No such file in server, cannot find '" + filename + "'.");
-        } else if (data.contains("ok,")) {
-            Console.out("ok");
-        } else {
-            Console.err("Unknown response data: " + data);
-        }
-
-        /*
-        PacketSocket.sendNowAsync(url, port, filename, packet -> {
-            Console.out.println("Send packet successfully.");
-        });
-        */
-
-//        try{
-//            LGetClient lGetClient = new LGetClient(url, port, filename);
-//            lGetClient.run();
-//        } catch (UnknownHostException e) {
-//            Console.err.println("Send failed, unknown host.");
-//        } catch (SocketException e) {
-//            Console.err.println("Send failed, can not create socket.");
-//        } catch (IOException e) {
-//            Console.err.println("Transfer or write failed.");
-//        } catch (LFTPException e) {
-//            Console.err.println(e.getMessage());
-//        }
     }
 }
