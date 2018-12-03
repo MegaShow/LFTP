@@ -38,9 +38,10 @@ public class LSend implements Runnable {
             Console.err("File '" + file.getAbsolutePath() + "' doesn't exist.");
             return;
         }
+        long filelength = (file.length() + 1023) / 1024 + 1;
         try {
             DatagramSocket socket = new DatagramSocket();
-            byte[] bytes = PacketSocket.send(url, port, 5000, ("Send," + socket.getLocalPort() + "," + filename).getBytes());
+            byte[] bytes = PacketSocket.send(url, port, 5000, ("Send," + socket.getLocalPort() + "," + filelength + "," + filename).getBytes());
             if (bytes == null) {
                 return;
             }
@@ -49,7 +50,7 @@ public class LSend implements Runnable {
                 Console.err("Same filename exist in server, as '" + filename + "'.");
             } else if (data.contains("ok,")) {
                 String[] parameters = data.split(",");
-                new Thread(new FileSender(socket, InetAddress.getByName(url), Integer.parseInt(parameters[1]), filename)).start();
+                new Thread(new FileSender(socket, InetAddress.getByName(url), Integer.parseInt(parameters[1]), filename, filelength, false)).start();
             } else {
                 Console.err("Unknown response data: " + data);
             }

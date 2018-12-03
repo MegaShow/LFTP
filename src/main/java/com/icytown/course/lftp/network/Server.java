@@ -1,12 +1,12 @@
 package com.icytown.course.lftp.network;
 
 import com.icytown.course.lftp.util.Console;
-import javafx.util.Pair;
 
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.net.*;
+import java.util.Map;
 
 public class Server {
 
@@ -42,15 +42,16 @@ public class Server {
                             ack.setData("not_found".getBytes());
                             Console.err(url + " want to download '" + file.getAbsolutePath() + "', but not found.");
                         } else {
-                            Pair<DatagramSocket, Integer> pair = SocketPool.getSocketAndPort(url);
+                            Map.Entry<DatagramSocket, Integer> pair = SocketPool.getSocketAndPort(url);
                             if (pair == null) {
                                 ack.setData("failed".getBytes());
                                 Console.err(url + " want to download '" + file.getAbsolutePath() + "', but alloc socket failed.");
                             } else {
-                                ack.setData(("ok," + pair.getValue()).getBytes());
+                                long filelength = (file.length() + 1023) / 1024 + 1;
+                                ack.setData(("ok," + pair.getValue() + "," + filelength).getBytes());
                                 Console.out(url + " want to download '" + file.getAbsolutePath() + "', allowed.");
                                 if (pair.getKey() != null) {
-                                    new Thread(new FileSender(pair.getKey(), rawPacket.getAddress(), Integer.parseInt(parameters[1]), file.getPath())).start();
+                                    new Thread(new FileSender(pair.getKey(), rawPacket.getAddress(), Integer.parseInt(parameters[1]), file.getPath(), filelength, true)).start();
                                 }
                             }
                         }
@@ -58,13 +59,13 @@ public class Server {
                         DatagramPacket ackPacket = new DatagramPacket(ackData, ackData.length, rawPacket.getAddress(), rawPacket.getPort());
                         socket.send(ackPacket);
                     } else if (parameters[0].equals("Send")) {
-                        File file = new File(folderPath, parameters[2]);
+                        File file = new File(folderPath, parameters[3]);
                         Packet ack = new Packet(packet.getId(), true);
                         if (file.exists()) {
                             ack.setData("exist".getBytes());
                             Console.err(url + " want to send file as '" + file.getAbsolutePath() + "', but another file exists.");
                         } else {
-                            Pair<DatagramSocket, Integer> pair = SocketPool.getSocketAndPort(url);
+                            Map.Entry<DatagramSocket, Integer> pair = SocketPool.getSocketAndPort(url);
                             if (pair == null) {
                                 ack.setData("failed".getBytes());
                                 Console.err(url + " want to send file as '" + file.getAbsolutePath() + "', but alloc socket failed.");
@@ -72,7 +73,7 @@ public class Server {
                                 ack.setData(("ok," + pair.getValue()).getBytes());
                                 Console.out(url + " want to send file as '" + file.getAbsolutePath() + "', allowed.");
                                 if (pair.getKey() != null) {
-                                    new Thread(new FileReceiver(pair.getKey(), file.getPath())).start();
+                                    new Thread(new FileReceiver(pair.getKey(), file.getPath(), Long.parseLong(parameters[2]), true)).start();
                                 }
                             }
                         }

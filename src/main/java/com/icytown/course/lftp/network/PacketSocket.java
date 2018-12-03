@@ -1,7 +1,6 @@
 package com.icytown.course.lftp.network;
 
 import com.icytown.course.lftp.util.Console;
-import javafx.util.Pair;
 
 import java.io.IOException;
 import java.net.*;

@@ -41,7 +41,8 @@ public class LGet implements Runnable {
             if (data.equals("not_found")) {
                 Console.err("No such file in server, cannot find '" + filename + "'.");
             } else if (data.contains("ok,")) {
-                new Thread(new FileReceiver(socket, filename)).start();
+                String[] parameters = data.split(",");
+                new Thread(new FileReceiver(socket, filename, Long.parseLong(parameters[2]), false)).start();
             } else {
                 Console.err("Unknown response data: " + data);
             }
