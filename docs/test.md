@@ -69,7 +69,7 @@ lftp serve [-p port] [datafolder]
 
 向互联网上的服务器上传文件，请求成功，传输成功。
 
-![](C:/Users/yumli/Desktop/16340040%E9%99%88%E7%A7%80%E5%98%8916340280%E4%BD%99%E6%BC%AB%E9%9C%96/report/test/internet.gif)
+![](test/internet.gif)
 
 ## 
 
