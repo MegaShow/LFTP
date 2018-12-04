@@ -41,7 +41,7 @@ public class LSend implements Runnable {
         long filelength = (file.length() + 1023) / 1024 + 1;
         try {
             DatagramSocket socket = new DatagramSocket();
-            byte[] bytes = PacketSocket.send(socket, url, port, 5000, ("Send," + filename + "," + filelength).getBytes(),
+            byte[] bytes = PacketSocket.send(socket, url, port, 5000, ("Send," + file.getName() + "," + filelength).getBytes(),
                     "Send request to " + url + ":" + port + ".");
             if (bytes == null) {
                 return;

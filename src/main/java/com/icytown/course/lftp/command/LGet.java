@@ -31,6 +31,10 @@ public class LGet implements Runnable {
             }
             url = url.substring(0, index);
         }
+        if (filename.contains("\\") || filename.contains("/")) {
+            Console.err("Filename cannot with '\\' and '/'.");
+            return;
+        }
         try {
             DatagramSocket socket = new DatagramSocket();
             byte[] bytes = PacketSocket.send(socket, url, port, 5000, ("Get," + filename).getBytes(),
