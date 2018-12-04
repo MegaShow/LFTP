@@ -2,7 +2,7 @@
 
 A large file transfer tool.
 
-[[GitHub](https://github.com/MegaShow/LFTP)\]  [[Design Doc]()\]  [[Test Doc]()\]
+[[GitHub](https://github.com/MegaShow/LFTP)\]  [[Design Doc](docs/design.md)\]  [[Test Doc](docs/test.md)\]
 
 ## Installation
 
