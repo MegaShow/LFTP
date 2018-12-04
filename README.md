@@ -6,9 +6,9 @@ A large file transfer tool.
 
 ## Installation
 
-下载[lftp-1.0.0.jar](https://github.com/MegaShow/LFTP/releases/tag/v1.0.0)，并运行即可。
+下载[lftp-1.0.0.zip](https://github.com/MegaShow/LFTP/releases/tag/v1.0.0)，并运行Shell脚本即可。
 
-可通过PowerShell的别名来简化命令输入。
+也可通过PowerShell的别名来简化命令输入。
 
 ```powershell
 function __lftp {java -jar C:\Your_LFTP_PATH\lftp-1.0.0.jar $args}
