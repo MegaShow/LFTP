@@ -94,7 +94,7 @@ public class FileReceiver implements Runnable {
             }
         } catch (IOException e) {
             // 接收到异常，破坏阻塞，退出线程
-            e.printStackTrace();
+            // e.printStackTrace();
         }
     }
 

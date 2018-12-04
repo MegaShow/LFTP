@@ -124,7 +124,7 @@ public class FileSender implements Runnable {
                                 if (cWindow > ssthresh) {
                                     cWindow = cWindow + 1.0f / cWindow;
                                 } else {
-                                    cWindow *= 2;
+                                    cWindow++;
                                 }
                             }
                             duplicateAck = 0;
