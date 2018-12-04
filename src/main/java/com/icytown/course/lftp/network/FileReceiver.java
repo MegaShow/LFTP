@@ -7,7 +7,6 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
-import java.net.InetAddress;
 import java.util.LinkedList;
 import java.util.Timer;
 import java.util.TimerTask;
@@ -15,6 +14,7 @@ import java.util.TimerTask;
 public class FileReceiver implements Runnable {
 
     private DatagramSocket socket;
+    private String url;
     private String filename;
     private long filelength;
     private boolean server;
@@ -22,6 +22,7 @@ public class FileReceiver implements Runnable {
     private Timer speedTimer = new Timer();
     private Timer finishTimer = new Timer();
     private final SpeedTask speedTask = new SpeedTask();
+    private FinishTimeOutTask finishTimeOutTask;
 
     private LinkedList<Packet> rcvBuffer = new LinkedList<>();
     private final int rcvBufLen = 10240;
@@ -30,8 +31,9 @@ public class FileReceiver implements Runnable {
     private int lastSeqRead;
     private boolean finish;
 
-    public FileReceiver(DatagramSocket socket, String filename, long filelength, boolean server) {
+    public FileReceiver(DatagramSocket socket, String url, String filename, long filelength, boolean server) {
         this.socket = socket;
+        this.url = url;
         this.filename = filename;
         this.filelength = filelength;
         this.server = server;
@@ -57,10 +59,6 @@ public class FileReceiver implements Runnable {
                             byte[] ackData = new Packet(0, true, rcvWindow).getBytes();
                             DatagramPacket ackDatagramPacket = new DatagramPacket(ackData, ackData.length, datagramPacket.getAddress(), datagramPacket.getPort());
                             socket.send(ackDatagramPacket);
-                        } else if (false && id < lastSeqAcked + 1) {
-                            byte[] ackData = new Packet(id, true, rcvWindow).getBytes();
-                            DatagramPacket ackDatagramPacket = new DatagramPacket(ackData, ackData.length, datagramPacket.getAddress(), datagramPacket.getPort());
-                            socket.send(ackDatagramPacket);
                         } else if (id != lastSeqAcked + 1) {
                             // 接收到失序分组，重复发送上一次的ACK
                             byte[] ackData = new Packet(lastSeqAcked, true, rcvWindow).getBytes();
@@ -72,12 +70,15 @@ public class FileReceiver implements Runnable {
                             Packet ackPacket = new Packet(packet.getId(), true, rcvWindow);
                             if (packet.isEnd()) {
                                 ackPacket.setEnd(true);
-                                finishTimer.schedule(new FinishTimeOutTask(datagramPacket.getAddress(), datagramPacket.getPort()), 10000);
+                                if (finishTimeOutTask == null) {
+                                    finishTimeOutTask = new FinishTimeOutTask();
+                                    finishTimer.schedule(finishTimeOutTask, server ? 3000 : 1000);
+                                }
                             } else if (packet.isFin()) {
                                 ackPacket.setFin(true);
                                 finish = true;
                                 finishTimer.cancel();
-                                new Thread(new FinishTimeOutTask(datagramPacket.getAddress(), datagramPacket.getPort())).start();
+                                finishTimeOutTask.finish();
                                 break;
                             } else {
                                 rcvBuffer.addLast(packet);
@@ -93,6 +94,7 @@ public class FileReceiver implements Runnable {
             }
         } catch (IOException e) {
             // 接收到异常，破坏阻塞，退出线程
+            e.printStackTrace();
         }
     }
 
@@ -124,26 +126,23 @@ public class FileReceiver implements Runnable {
 
     public class FinishTimeOutTask extends TimerTask {
 
-        private InetAddress address;
-        private int port;
-
-        public FinishTimeOutTask(InetAddress address, int port) {
-            this.address = address;
-            this.port = port;
-        }
-
-        @Override
-        public void run() {
+        public void finish() {
             synchronized (FileReceiver.this) {
                 finish = true;
-                SocketPool.removeSocket(address.getHostName() + ":" + port);
-                if (!server) {
+                if (server) {
+                    SocketPool.removeSocket(url);
+                } else {
                     long time = speedTask.show();
                     speedTimer.cancel();
                     Console.progressFinish(time, filelength);
                 }
-                Console.out("Receive file from " + address.getHostName() + ":" + port + " successfully.");
+                Console.out("Receive file from " + url + " successfully.");
             }
+        }
+
+        @Override
+        public void run() {
+            finish();
         }
     }
 
@@ -167,7 +166,7 @@ public class FileReceiver implements Runnable {
         @Override
         public void run() {
             show();
-            if (finish && rcvBuffer.size() == 0) {
+            if (finish) {
                 speedTimer.cancel();
             }
         }

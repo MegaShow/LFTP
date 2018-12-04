@@ -33,7 +33,8 @@ public class LGet implements Runnable {
         }
         try {
             DatagramSocket socket = new DatagramSocket();
-            byte[] bytes = PacketSocket.send(socket, url, port, 5000, ("Get," + filename).getBytes());
+            byte[] bytes = PacketSocket.send(socket, url, port, 5000, ("Get," + filename).getBytes(),
+                    "Send request to " + url + ":" + port + ".");
             if (bytes == null) {
                 return;
             }
@@ -43,8 +44,10 @@ public class LGet implements Runnable {
             } else if (data.contains("ok,")) {
                 String[] parameters = data.split(",");
                 DatagramSocket fileSocket = new DatagramSocket();
-                byte[] fileBytes = PacketSocket.send(fileSocket, url, Integer.parseInt(parameters[1]), 5000, "Ready".getBytes());
-                new Thread(new FileReceiver(fileSocket, filename, Long.parseLong(parameters[2]), false)).start();
+                int filePort = Integer.parseInt(parameters[1]);
+                byte[] fileBytes = PacketSocket.send(fileSocket, url, filePort, 5000, "Ready".getBytes(),
+                        "Send ready state to " + url + ":" + filePort + ".");
+                new Thread(new FileReceiver(fileSocket, url + ":" + filePort, filename, Long.parseLong(parameters[2]), false)).start();
             } else {
                 Console.err("Unknown response data: " + data);
             }

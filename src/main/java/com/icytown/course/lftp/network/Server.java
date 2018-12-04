@@ -60,7 +60,7 @@ public class Server {
                                                 Packet packet1 = Packet.fromBytes(readyPacket.getData());
                                                 if (packet1 != null && new String(packet1.getData()).equals("Ready")) {
                                                     Console.out(url + " ready to download.");
-                                                    new Thread(new FileSender(pair.getKey(), readyPacket.getAddress(), readyPacket.getPort(), file.getPath(), filelength, true)).start();
+                                                    new Thread(new FileSender(pair.getKey(), readyPacket.getAddress(), readyPacket.getPort(), url, file.getPath(), filelength, true)).start();
                                                     break;
                                                 }
                                             }
@@ -89,7 +89,7 @@ public class Server {
                                 ack.setData(("ok," + pair.getValue()).getBytes());
                                 Console.out(url + " want to send file as '" + file.getAbsolutePath() + "', allowed.");
                                 if (pair.getKey() != null) {
-                                    new Thread(new FileReceiver(pair.getKey(), file.getPath(), Long.parseLong(parameters[2]), true)).start();
+                                    new Thread(new FileReceiver(pair.getKey(), url, file.getPath(), Long.parseLong(parameters[2]), true)).start();
                                 }
                             }
                         }

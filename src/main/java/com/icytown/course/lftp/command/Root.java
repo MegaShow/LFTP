@@ -13,6 +13,6 @@ public class Root implements Runnable {
 
     @Override
     public void run() {
-        System.out.println("Call Root");
+        System.out.println("LFTP, a large file transfer tool, with vesion 1.0.0");
     }
 }

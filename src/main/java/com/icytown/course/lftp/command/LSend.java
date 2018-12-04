@@ -41,7 +41,8 @@ public class LSend implements Runnable {
         long filelength = (file.length() + 1023) / 1024 + 1;
         try {
             DatagramSocket socket = new DatagramSocket();
-            byte[] bytes = PacketSocket.send(socket, url, port, 5000, ("Send," + filename + "," + filelength).getBytes());
+            byte[] bytes = PacketSocket.send(socket, url, port, 5000, ("Send," + filename + "," + filelength).getBytes(),
+                    "Send request to " + url + ":" + port + ".");
             if (bytes == null) {
                 return;
             }
@@ -51,7 +52,8 @@ public class LSend implements Runnable {
             } else if (data.contains("ok,")) {
                 String[] parameters = data.split(",");
                 DatagramSocket fileSocket = new DatagramSocket();
-                new Thread(new FileSender(fileSocket, InetAddress.getByName(url), Integer.parseInt(parameters[1]), filename, filelength, false)).start();
+                int filePort = Integer.parseInt(parameters[1]);
+                new Thread(new FileSender(fileSocket, InetAddress.getByName(url), filePort, url + ":" + port, filename, filelength, false)).start();
             } else {
                 Console.err("Unknown response data: " + data);
             }

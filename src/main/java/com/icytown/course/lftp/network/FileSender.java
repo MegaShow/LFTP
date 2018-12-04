@@ -15,6 +15,7 @@ public class FileSender implements Runnable {
     private DatagramSocket socket;
     private InetAddress address;
     private int port;
+    private String url;
     private String filepath;
     private long filelength;
     private boolean server;
@@ -33,10 +34,11 @@ public class FileSender implements Runnable {
     private Map<Integer, Packet> notAckedBuffer = new HashMap<>(); // 缓存已发送、未确认的分组
     private boolean finish = false;
 
-    public FileSender(DatagramSocket socket, InetAddress address, int port, String filepath, long filelength, boolean server) {
+    public FileSender(DatagramSocket socket, InetAddress address, int port, String url, String filepath, long filelength, boolean server) {
         this.socket = socket;
         this.address = address;
         this.port = port;
+        this.url = url;
         this.filepath = filepath;
         this.filelength = filelength;
         this.server = server;
@@ -68,7 +70,7 @@ public class FileSender implements Runnable {
                             byte[] bytes = packet.getBytes();
                             DatagramPacket datagramPacket = new DatagramPacket(bytes, bytes.length, address, port);
                             socket.send(datagramPacket);
-                            // Console.out("Send to " + address.getHostName() + ":" + port + ", with packet " + packet.getId() + ".");
+                            // Console.out("Send to " + url + ", with packet " + packet.getId() + ".");
                         }
                     } else {
                         // 接收窗口满时，发送只有一个字节数据的报文段，其seq为0
@@ -79,7 +81,7 @@ public class FileSender implements Runnable {
                     }
                 }
             }
-            finishTimer.schedule(new FinishTimeOutTask(), 10000);
+            finishTimer.schedule(new FinishTimeOutTask(), server ? 3000 : 1000);
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -97,12 +99,12 @@ public class FileSender implements Runnable {
                 try {
                     socket.receive(datagramPacket);
                     Packet packet = Packet.fromBytes(datagramPacket.getData());
-                    if (packet != null) {
+                    if (packet != null && packet.isAck()) {
                         synchronized (AckTask.this) {
                             rcvWindow = packet.getRcvWindow();
                         }
                         if (packet.getId() >= lastSeqAcked + 1) {
-                            // Console.out("Receive from " + address.getHostName() + ":" + port + ", with ack " + packet.getId() + ".");
+                            // Console.out("Receive from " + url + ", with ack " + packet.getId() + ".");
                             synchronized (FileSender.this) {
                                 for (int i = lastSeqAcked + 1; i <= packet.getId(); i++) {
                                     notAckedBuffer.remove(i);
@@ -154,6 +156,7 @@ public class FileSender implements Runnable {
                 if (rcvWindow != 0 && lastSeqAcked + 1 <= lastSeqSent) {
                     int finalSeq = Math.min(lastSeqAcked + rcvWindow - 1, lastSeqSent);
                     // Console.out("Time out, try to resend the packets from " + (lastSeqAcked + 1) + " to " + finalSeq + ".");
+                    // Console.out("cWindow: " + cWindow + ",  ssthresh: " + ssthresh);
                     // Console.out("" + lastSeqAcked + " " + rcvWindow + " " + lastSeqSent + " " + cWindow + " " + ssthresh);
                     if (lastSeqSent - lastSeqAcked <= rcvWindow) {
                         for (int i = lastSeqAcked + 1; i <= finalSeq; i++) {
@@ -208,13 +211,14 @@ public class FileSender implements Runnable {
         public void run() {
             synchronized (FileSender.this) {
                 finish = true;
-                SocketPool.removeSocket(address.getHostName() + ":" + port);
-                if (!server) {
+                if (server) {
+                    SocketPool.removeSocket(url);
+                } else {
                     long time = speedTask.show();
                     speedTimer.cancel();
                     Console.progressFinish(time, filelength);
                 }
-                Console.out("Send file to " + address.getHostName() + ":" + port + " successfully.");
+                Console.out("Send file to " + url + " successfully.");
             }
         }
     }

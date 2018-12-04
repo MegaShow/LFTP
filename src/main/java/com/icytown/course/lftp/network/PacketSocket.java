@@ -9,7 +9,7 @@ public class PacketSocket {
 
     private static boolean flag = false;
 
-    public static byte[] send(DatagramSocket socket, String ip, int port, long timeOut, byte[] body) {
+    public static byte[] send(DatagramSocket socket, String ip, int port, long timeOut, byte[] body, String msg) {
         try {
             Packet result = null;
             Packet packet = new Packet(0);
@@ -19,7 +19,7 @@ public class PacketSocket {
             new Thread(new TimeOutTask(socket, datagramPacket)).start();
             byte[] recData = new byte[1400];
             DatagramPacket recDatagramPacket = new DatagramPacket(recData, recData.length);
-            Console.out("Send request to " + ip + ":" + port + ".");
+            Console.out(msg);
             socket.send(datagramPacket);
             while (!flag) {
                 socket.receive(recDatagramPacket);
@@ -74,10 +74,18 @@ public class PacketSocket {
         @Override
         public void run() {
             updateTime();
+            int count = 0;
             while (!flag) {
                 if (System.currentTimeMillis() - getTime() > 300) {
                     try {
-                        Console.err("Time out, send request to " + packet.getAddress().getHostName() + ":" + packet.getPort() + " again.");
+                        count++;
+                        if (count % 3 == 0) {
+                            Console.err("Time out, send request to " + packet.getAddress().getHostName() + ":" + packet.getPort() + " again.");
+                        }
+                        if (count == 20) {
+                            Console.err("Time out, please checkout your network.");
+                            System.exit(-2);
+                        }
                         socket.send(packet);
                     } catch (IOException e) {
                         e.printStackTrace();
