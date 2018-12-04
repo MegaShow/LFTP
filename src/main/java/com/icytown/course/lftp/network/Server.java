@@ -36,7 +36,7 @@ public class Server {
                     Console.out("Recieve request from " + url);
                     String[] parameters = new String(packet.getData()).split(",");
                     if (parameters[0].equals("Get")) {
-                        File file = new File(folderPath, parameters[2]);
+                        File file = new File(folderPath, parameters[1]);
                         Packet ack = new Packet(packet.getId(), true);
                         if (!file.exists()) {
                             ack.setData("not_found".getBytes());
@@ -51,7 +51,23 @@ public class Server {
                                 ack.setData(("ok," + pair.getValue() + "," + filelength).getBytes());
                                 Console.out(url + " want to download '" + file.getAbsolutePath() + "', allowed.");
                                 if (pair.getKey() != null) {
-                                    new Thread(new FileSender(pair.getKey(), rawPacket.getAddress(), Integer.parseInt(parameters[1]), file.getPath(), filelength, true)).start();
+                                    new Thread(() -> {
+                                        byte[] bytes = new byte[1024];
+                                        DatagramPacket readyPacket = new DatagramPacket(bytes, bytes.length);
+                                        try {
+                                            while (true) {
+                                                pair.getKey().receive(readyPacket);
+                                                Packet packet1 = Packet.fromBytes(readyPacket.getData());
+                                                if (packet1 != null && new String(packet1.getData()).equals("Ready")) {
+                                                    Console.out(url + " ready to download.");
+                                                    new Thread(new FileSender(pair.getKey(), readyPacket.getAddress(), readyPacket.getPort(), file.getPath(), filelength, true)).start();
+                                                    break;
+                                                }
+                                            }
+                                        } catch (IOException e) {
+                                            e.printStackTrace();
+                                        }
+                                    }).start();
                                 }
                             }
                         }
@@ -59,7 +75,7 @@ public class Server {
                         DatagramPacket ackPacket = new DatagramPacket(ackData, ackData.length, rawPacket.getAddress(), rawPacket.getPort());
                         socket.send(ackPacket);
                     } else if (parameters[0].equals("Send")) {
-                        File file = new File(folderPath, parameters[3]);
+                        File file = new File(folderPath, parameters[1]);
                         Packet ack = new Packet(packet.getId(), true);
                         if (file.exists()) {
                             ack.setData("exist".getBytes());

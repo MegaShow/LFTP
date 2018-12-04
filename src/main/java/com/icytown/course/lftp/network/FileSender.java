@@ -20,6 +20,7 @@ public class FileSender implements Runnable {
     private boolean server;
 
     private Timer speedTimer = new Timer();
+    private Timer finishTimer = new Timer();
     private final SpeedTask speedTask = new SpeedTask();
     private final TimeOutTask timeOutTask = new TimeOutTask();
     private final AckTask ackTask = new AckTask();
@@ -53,7 +54,6 @@ public class FileSender implements Runnable {
             while (read != -1) {
                 synchronized (FileSender.class) {
                     if (rcvWindow != 0) {
-                        boolean flag;
                         if (lastSeqSent - lastSeqAcked <= rcvWindow && lastSeqSent - lastSeqAcked <= cWindow) {
                             lastSeqSent++;
                             Packet packet = new Packet(lastSeqSent, false);
@@ -61,7 +61,6 @@ public class FileSender implements Runnable {
                             read = fis.read(data);
                             if (read == -1) {
                                 packet.setEnd(true);
-                                finish = true;
                             } else {
                                 packet.setData(Arrays.copyOf(data, read));
                             }
@@ -69,7 +68,7 @@ public class FileSender implements Runnable {
                             byte[] bytes = packet.getBytes();
                             DatagramPacket datagramPacket = new DatagramPacket(bytes, bytes.length, address, port);
                             socket.send(datagramPacket);
-                            Console.out("Send to " + address.getHostName() + ":" + port + ", with packet " + packet.getId() + ".");
+                            // Console.out("Send to " + address.getHostName() + ":" + port + ", with packet " + packet.getId() + ".");
                         }
                     } else {
                         // 接收窗口满时，发送只有一个字节数据的报文段，其seq为0
@@ -80,13 +79,7 @@ public class FileSender implements Runnable {
                     }
                 }
             }
-            SocketPool.removeSocket(address.getHostName() + ":" + port);
-            if (!server) {
-                long time = speedTask.show();
-                speedTimer.cancel();
-                Console.progressFinish(time, filelength);
-            }
-            Console.out("Send file to " + address.getHostName() + ":" + port + " successfully.");
+            finishTimer.schedule(new FinishTimeOutTask(), 10000);
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -100,7 +93,7 @@ public class FileSender implements Runnable {
         public void run() {
             byte[] bytes = new byte[1400];
             DatagramPacket datagramPacket = new DatagramPacket(bytes, bytes.length);
-            while (!(finish && notAckedBuffer.size() == 0)) {
+            while (!finish) {
                 try {
                     socket.receive(datagramPacket);
                     Packet packet = Packet.fromBytes(datagramPacket.getData());
@@ -108,12 +101,24 @@ public class FileSender implements Runnable {
                         synchronized (AckTask.this) {
                             rcvWindow = packet.getRcvWindow();
                         }
-                        if (packet.getId() == lastSeqAcked + 1) {
-                            notAckedBuffer.remove(packet.getId());
-                            synchronized (AckTask.this) {
-                                lastSeqAcked++;
-                            }
+                        if (packet.getId() >= lastSeqAcked + 1) {
+                            // Console.out("Receive from " + address.getHostName() + ":" + port + ", with ack " + packet.getId() + ".");
                             synchronized (FileSender.this) {
+                                for (int i = lastSeqAcked + 1; i <= packet.getId(); i++) {
+                                    notAckedBuffer.remove(i);
+                                }
+                                lastSeqAcked = packet.getId();
+                                if (packet.isEnd()) {
+                                    Packet fin = new Packet(lastSeqSent + 1);
+                                    fin.setFin(true);
+                                    byte[] finData = fin.getBytes();
+                                    DatagramPacket finDatagramPacket = new DatagramPacket(finData, finData.length, address, port);
+                                    socket.send(finDatagramPacket);
+                                    finish = true;
+                                    finishTimer.cancel();
+                                    new Thread(new FinishTimeOutTask()).start();
+                                    break;
+                                }
                                 if (cWindow > ssthresh) {
                                     cWindow = cWindow + 1.0f / cWindow;
                                 } else {
@@ -122,7 +127,6 @@ public class FileSender implements Runnable {
                             }
                             duplicateAck = 0;
                             timeOutTask.updateTime();
-                            Console.out("Receive from " + address.getHostName() + ":" + port + ", with ack " + packet.getId() + ".");
                         } else if (packet.getId() == lastSeqAcked) {
                             duplicateAck++;
                         }
@@ -149,14 +153,16 @@ public class FileSender implements Runnable {
             synchronized (FileSender.this) {
                 if (rcvWindow != 0 && lastSeqAcked + 1 <= lastSeqSent) {
                     int finalSeq = Math.min(lastSeqAcked + rcvWindow - 1, lastSeqSent);
-                    Console.out("Time out, try to resend the packets from " + (lastSeqAcked + 1) + " to " + finalSeq + ".");
-                    Console.out("" + lastSeqAcked + " " + rcvWindow + " " + lastSeqSent + " " + cWindow + " " + ssthresh);
+                    // Console.out("Time out, try to resend the packets from " + (lastSeqAcked + 1) + " to " + finalSeq + ".");
+                    // Console.out("" + lastSeqAcked + " " + rcvWindow + " " + lastSeqSent + " " + cWindow + " " + ssthresh);
                     if (lastSeqSent - lastSeqAcked <= rcvWindow) {
                         for (int i = lastSeqAcked + 1; i <= finalSeq; i++) {
                             try {
-                                byte[] bytes = notAckedBuffer.get(i).getBytes();
-                                DatagramPacket datagramPacket = new DatagramPacket(bytes, bytes.length, address, port);
-                                socket.send(datagramPacket);
+                                if (notAckedBuffer.containsKey(i)) {
+                                    byte[] bytes = notAckedBuffer.get(i).getBytes();
+                                    DatagramPacket datagramPacket = new DatagramPacket(bytes, bytes.length, address, port);
+                                    socket.send(datagramPacket);
+                                }
                             } catch (IOException e) {
                                 e.printStackTrace();
                             }
@@ -181,7 +187,7 @@ public class FileSender implements Runnable {
         @Override
         public void run() {
             updateTime();
-            while (!(finish && notAckedBuffer.size() == 0)) {
+            while (!finish) {
                 if (System.currentTimeMillis() - getTime() > 300) {
                     synchronized (FileSender.this) {
                         ssthresh = (int) Math.round(cWindow / 2);
@@ -192,6 +198,23 @@ public class FileSender implements Runnable {
                     resend();
                     updateTime();
                 }
+            }
+        }
+    }
+
+    public class FinishTimeOutTask extends TimerTask {
+
+        @Override
+        public void run() {
+            synchronized (FileSender.this) {
+                finish = true;
+                SocketPool.removeSocket(address.getHostName() + ":" + port);
+                if (!server) {
+                    long time = speedTask.show();
+                    speedTimer.cancel();
+                    Console.progressFinish(time, filelength);
+                }
+                Console.out("Send file to " + address.getHostName() + ":" + port + " successfully.");
             }
         }
     }

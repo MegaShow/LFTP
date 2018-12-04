@@ -4,53 +4,39 @@ import com.icytown.course.lftp.util.Console;
 
 import java.io.IOException;
 import java.net.*;
-import java.nio.ByteBuffer;
-import java.nio.channels.DatagramChannel;
 
 public class PacketSocket {
 
-    private static int sequence = 0;
+    private static boolean flag = false;
 
-    public static byte[] send(String ip, int port, long timeOut, byte[] body) {
-        try (DatagramChannel channel = DatagramChannel.open()) {
+    public static byte[] send(DatagramSocket socket, String ip, int port, long timeOut, byte[] body) {
+        try {
             Packet result = null;
-            channel.configureBlocking(false);
-            Packet packet = new Packet(sequence);
-            sequence++;
+            Packet packet = new Packet(0);
             packet.setData(body);
             byte[] data = packet.getBytes();
-            ByteBuffer buffer = ByteBuffer.wrap(data);
-            SocketAddress address = new InetSocketAddress(ip, port);
-            long timeOutTime = 500;
-            long lastTime;
-            boolean flag = false;
+            DatagramPacket datagramPacket = new DatagramPacket(data, data.length, new InetSocketAddress(ip, port));
+            new Thread(new TimeOutTask(socket, datagramPacket)).start();
+            byte[] recData = new byte[1400];
+            DatagramPacket recDatagramPacket = new DatagramPacket(recData, recData.length);
             Console.out("Send request to " + ip + ":" + port + ".");
-            while (!flag && timeOutTime < timeOut) {
-                channel.send(buffer, address);
-                lastTime = System.currentTimeMillis();
-                ByteBuffer recBuffer = ByteBuffer.allocate(1400);
-                while (System.currentTimeMillis() - lastTime < timeOutTime && System.currentTimeMillis() - lastTime < timeOut) {
-                    SocketAddress recAddress = channel.receive(recBuffer);
-                    if (recAddress != null) {
-                        Packet recPacket = Packet.fromBytes(recBuffer.array());
-                        if (recPacket != null && recPacket.getId() == packet.getId() && recPacket.isAck()) {
-                            result = recPacket;
-                            flag = true;
-                            break;
-                        }
+            socket.send(datagramPacket);
+            while (!flag) {
+                socket.receive(recDatagramPacket);
+                Packet recPacket = Packet.fromBytes(recDatagramPacket.getData());
+                if (recPacket != null && recPacket.getId() == 0 && recPacket.isAck()) {
+                    synchronized (PacketSocket.class) {
+                        flag = true;
                     }
-                }
-                if (!flag) {
-                    timeOutTime <<= 1;
-                    channel.send(buffer, address);
-                    Console.err("Time out, send request to " + ip + ":" + port + " again.");
+                    result = recPacket;
+                    break;
                 }
             }
-            if (flag) {
-                Console.out("Send request successfully.");
-                return result.getData();
+            Console.out("Send request successfully.");
+            if (result == null) {
+                return null;
             } else {
-                Console.err("Time out, please check your network.");
+                return result.getData();
             }
         } catch (SocketException e) {
             Console.err("Send failed, can not create socket.");
@@ -60,5 +46,45 @@ public class PacketSocket {
             Console.err("Send failed.");
         }
         return null;
+    }
+
+    public static class TimeOutTask implements Runnable {
+
+        private long time;
+        private DatagramSocket socket;
+        private DatagramPacket packet;
+
+        public TimeOutTask(DatagramSocket socket, DatagramPacket packet) {
+            this.socket = socket;
+            this.packet = packet;
+        }
+
+        public void updateTime() {
+            synchronized (TimeOutTask.this) {
+                time = System.currentTimeMillis();
+            }
+        }
+
+        public long getTime() {
+            synchronized (TimeOutTask.this) {
+                return time;
+            }
+        }
+
+        @Override
+        public void run() {
+            updateTime();
+            while (!flag) {
+                if (System.currentTimeMillis() - getTime() > 300) {
+                    try {
+                        Console.err("Time out, send request to " + packet.getAddress().getHostName() + ":" + packet.getPort() + " again.");
+                        socket.send(packet);
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                    updateTime();
+                }
+            }
+        }
     }
 }

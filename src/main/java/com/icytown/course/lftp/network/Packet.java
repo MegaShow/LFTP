@@ -8,6 +8,7 @@ public class Packet implements Serializable {
 
     private boolean ack;
     private boolean end;
+    private boolean fin;
     private int rcvWindow;
     private byte[] data;
 
@@ -28,8 +29,12 @@ public class Packet implements Serializable {
         this.rcvWindow = rcvWindow;
     }
 
-    public void setEnd(boolean _end) {
-        end = _end;
+    public void setEnd(boolean end) {
+        this.end = end;
+    }
+
+    public void setFin(boolean fin) {
+        this.fin = fin;
     }
 
     public int getId() {
@@ -42,6 +47,10 @@ public class Packet implements Serializable {
 
     public boolean isEnd() {
         return end;
+    }
+
+    public boolean isFin() {
+        return fin;
     }
 
     public int getRcvWindow() {

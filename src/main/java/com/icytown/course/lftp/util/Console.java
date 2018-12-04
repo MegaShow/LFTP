@@ -37,7 +37,7 @@ public class Console {
                 nowType++;
             }
             StringBuilder msg = new StringBuilder("[>");
-            for (int i = 0; i <= 99; i+= 2) {
+            for (int i = 1; i <= 99; i+= 2) {
                 if (i <= value) {
                     msg.append("=");
                 } else {

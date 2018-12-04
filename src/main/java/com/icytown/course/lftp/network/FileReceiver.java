@@ -7,6 +7,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
+import java.net.InetAddress;
 import java.util.LinkedList;
 import java.util.Timer;
 import java.util.TimerTask;
@@ -19,6 +20,7 @@ public class FileReceiver implements Runnable {
     private boolean server;
 
     private Timer speedTimer = new Timer();
+    private Timer finishTimer = new Timer();
     private final SpeedTask speedTask = new SpeedTask();
 
     private LinkedList<Packet> rcvBuffer = new LinkedList<>();
@@ -53,46 +55,44 @@ public class FileReceiver implements Runnable {
                         int id = packet.getId();
                         if (id == 0) {
                             byte[] ackData = new Packet(0, true, rcvWindow).getBytes();
-                            DatagramPacket ackPacket = new DatagramPacket(ackData, ackData.length, datagramPacket.getAddress(), datagramPacket.getPort());
-                            socket.send(ackPacket);
-                        } else if (id < lastSeqAcked + 1) {
-                            if (packet.isEnd()) {
-                                finish = true;
-                            }
+                            DatagramPacket ackDatagramPacket = new DatagramPacket(ackData, ackData.length, datagramPacket.getAddress(), datagramPacket.getPort());
+                            socket.send(ackDatagramPacket);
+                        } else if (false && id < lastSeqAcked + 1) {
                             byte[] ackData = new Packet(id, true, rcvWindow).getBytes();
-                            DatagramPacket ackPacket = new DatagramPacket(ackData, ackData.length, datagramPacket.getAddress(), datagramPacket.getPort());
-                            socket.send(ackPacket);
-                        } else if (id > lastSeqAcked + 1) {
+                            DatagramPacket ackDatagramPacket = new DatagramPacket(ackData, ackData.length, datagramPacket.getAddress(), datagramPacket.getPort());
+                            socket.send(ackDatagramPacket);
+                        } else if (id != lastSeqAcked + 1) {
                             // 接收到失序分组，重复发送上一次的ACK
                             byte[] ackData = new Packet(lastSeqAcked, true, rcvWindow).getBytes();
-                            DatagramPacket ackPacket = new DatagramPacket(ackData, ackData.length, datagramPacket.getAddress(), datagramPacket.getPort());
-                            socket.send(ackPacket);
+                            DatagramPacket ackDatagramPacket = new DatagramPacket(ackData, ackData.length, datagramPacket.getAddress(), datagramPacket.getPort());
+                            socket.send(ackDatagramPacket);
                         } else if (rcvWindow != 0 && id == lastSeqAcked + 1) {
                             // 如果接收窗口未满，则按序接收，进行累积确认
                             // Console.out("Receive packet " + packet.getId());
+                            Packet ackPacket = new Packet(packet.getId(), true, rcvWindow);
                             if (packet.isEnd()) {
+                                ackPacket.setEnd(true);
+                                finishTimer.schedule(new FinishTimeOutTask(datagramPacket.getAddress(), datagramPacket.getPort()), 10000);
+                            } else if (packet.isFin()) {
+                                ackPacket.setFin(true);
                                 finish = true;
+                                finishTimer.cancel();
+                                new Thread(new FinishTimeOutTask(datagramPacket.getAddress(), datagramPacket.getPort())).start();
+                                break;
                             } else {
                                 rcvBuffer.addLast(packet);
                             }
                             lastSeqAcked++;
                             rcvWindow--;
-                            byte[] ackData = new Packet(packet.getId(), true, rcvWindow).getBytes();
-                            DatagramPacket ackPacket = new DatagramPacket(ackData, ackData.length, datagramPacket.getAddress(), datagramPacket.getPort());
-                            socket.send(ackPacket);
+                            byte[] ackData = ackPacket.getBytes();
+                            DatagramPacket ackDatagramPacket = new DatagramPacket(ackData, ackData.length, datagramPacket.getAddress(), datagramPacket.getPort());
+                            socket.send(ackDatagramPacket);
                         }
                     }
                 }
             }
-            SocketPool.removeSocket(datagramPacket.getAddress().getHostName() + ":" + datagramPacket.getPort());
-            if (!server) {
-                long time = speedTask.show();
-                speedTimer.cancel();
-                Console.progressFinish(time, filelength);
-            }
-            Console.out("Receive file from " + datagramPacket.getAddress().getHostName() + ":" + datagramPacket.getPort() + " successfully.");
         } catch (IOException e) {
-            e.printStackTrace();
+            // 接收到异常，破坏阻塞，退出线程
         }
     }
 
@@ -118,6 +118,31 @@ public class FileReceiver implements Runnable {
                 }
             } catch (IOException e) {
                 e.printStackTrace();
+            }
+        }
+    }
+
+    public class FinishTimeOutTask extends TimerTask {
+
+        private InetAddress address;
+        private int port;
+
+        public FinishTimeOutTask(InetAddress address, int port) {
+            this.address = address;
+            this.port = port;
+        }
+
+        @Override
+        public void run() {
+            synchronized (FileReceiver.this) {
+                finish = true;
+                SocketPool.removeSocket(address.getHostName() + ":" + port);
+                if (!server) {
+                    long time = speedTask.show();
+                    speedTimer.cancel();
+                    Console.progressFinish(time, filelength);
+                }
+                Console.out("Receive file from " + address.getHostName() + ":" + port + " successfully.");
             }
         }
     }
