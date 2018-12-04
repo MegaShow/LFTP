@@ -71,5 +71,3 @@ lftp serve [-p port] [datafolder]
 
 ![](test/internet.gif)
 
-## 
-
